@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Plus, Minus, Trash2 } from 'lucide-react';
+import { useToast } from '../hooks/useToast';
+import Toast from './Toast';
 import api from '../services/api';
 
 export default function VentasView() {
+  const { toast, showToast, hideToast } = useToast();
   const [productos, setProductos] = useState([]);
   const [carrito, setCarrito] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -17,20 +20,20 @@ export default function VentasView() {
       const response = await api.get('/productos');
       setProductos(response.data.productos);
     } catch (error) {
-      console.error('Error:', error);
+      showToast('Error al cargar productos', 'error');
     }
   };
 
   const agregarProducto = (producto) => {
     if (producto.cantidad <= 0) {
-      alert('Producto sin stock');
+      showToast('Producto sin stock', 'error');
       return;
     }
 
     const existing = carrito.find(item => item.id === producto.id);
     if (existing) {
       if (existing.cantidad >= producto.cantidad) {
-        alert('No hay suficiente stock');
+        showToast('No hay suficiente stock', 'error');
         return;
       }
       setCarrito(carrito.map(item => 
@@ -47,7 +50,7 @@ export default function VentasView() {
       if (item.id === id) {
         const nuevaCantidad = item.cantidad + delta;
         if (nuevaCantidad > producto.cantidad) {
-          alert('No hay suficiente stock');
+          showToast('No hay suficiente stock', 'error');
           return item;
         }
         if (nuevaCantidad <= 0) {
@@ -65,7 +68,7 @@ export default function VentasView() {
 
   const finalizarVenta = async () => {
     if (carrito.length === 0) {
-      alert('El carrito está vacío');
+      showToast('El carrito está vacío', 'error');
       return;
     }
 
@@ -78,17 +81,23 @@ export default function VentasView() {
 
       const response = await api.post('/ventas', { productos });
       
-      // Preguntar si quiere descargar el ticket
       const descargar = window.confirm('Venta registrada exitosamente. ¿Desea descargar el ticket?');
       
       if (descargar) {
         await descargarTicket(response.data.venta);
       }
       
+      showToast('Venta registrada correctamente', 'success');
       setCarrito([]);
       fetchProductos();
     } catch (error) {
-      alert(error.response?.data?.error || 'Error al registrar venta');
+      const errorMsg = error.response?.data?.error || 'Error al registrar venta';
+      showToast(errorMsg, 'error');
+      
+      // Si es error de stock, refrescar productos
+      if (errorMsg.includes('Stock insuficiente')) {
+        fetchProductos();
+      }
     } finally {
       setLoading(false);
     }
@@ -108,7 +117,7 @@ export default function VentasView() {
       link.click();
       link.remove();
     } catch (error) {
-      alert('Error al descargar ticket');
+      showToast('Error al descargar ticket', 'error');
     }
   };
 
@@ -121,6 +130,8 @@ export default function VentasView() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
+      
       <div className="bg-white rounded-xl shadow-sm p-6">
         <h2 className="text-xl font-bold mb-4">Productos Disponibles</h2>
         

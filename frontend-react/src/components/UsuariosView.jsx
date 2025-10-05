@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, X } from 'lucide-react';
+import { useToast } from '../hooks/useToast';
+import Toast from './Toast';
 import api from '../services/api';
 
 export default function UsuariosView() {
+  const { toast, showToast, hideToast } = useToast();
   const [usuarios, setUsuarios] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -22,7 +25,7 @@ export default function UsuariosView() {
       const response = await api.get('/usuarios');
       setUsuarios(response.data.usuarios);
     } catch (error) {
-      console.error('Error:', error);
+      showToast('Error al cargar usuarios', 'error');
     } finally {
       setLoading(false);
     }
@@ -33,10 +36,10 @@ export default function UsuariosView() {
 
     try {
       await api.delete(`/usuarios/${id}`);
-      alert('Usuario eliminado correctamente');
+      showToast('Usuario eliminado correctamente', 'success');
       fetchUsuarios();
     } catch (error) {
-      alert(error.response?.data?.error || 'Error al eliminar usuario');
+      showToast(error.response?.data?.error || 'Error al eliminar usuario', 'error');
     }
   };
 
@@ -65,22 +68,21 @@ export default function UsuariosView() {
 
     try {
       if (selectedUser) {
-        // Si no hay nueva contraseña, no la incluir
         const data = formData.password 
           ? formData 
           : { username: formData.username, rol: formData.rol };
         
         await api.put(`/usuarios/${selectedUser.id}`, data);
-        alert('Usuario actualizado correctamente');
+        showToast('Usuario actualizado correctamente', 'success');
       } else {
         await api.post('/usuarios/registro', formData);
-        alert('Usuario creado correctamente');
+        showToast('Usuario creado correctamente', 'success');
       }
 
       setModalOpen(false);
       fetchUsuarios();
     } catch (err) {
-      alert(err.response?.data?.error || 'Error al guardar usuario');
+      showToast(err.response?.data?.error || 'Error al guardar usuario', 'error');
     }
   };
 
@@ -88,6 +90,8 @@ export default function UsuariosView() {
 
   return (
     <div>
+      {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
+      
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold">Gestión de Usuarios</h2>
         <button 
