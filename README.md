@@ -1,18 +1,3 @@
-Perfecto. Ahora tenemos el sistema funcionando muy bien. Vamos a actualizar el README para documentar todo el proyecto completo.
-
----
-
-## Paso 10: Actualizar README.md
-
-Este README será completo, documentando tanto backend como frontend.
-
-Ve a la carpeta raíz del proyecto:
-
-```bash
-cd C:\inventario-ventas
-```
-
-Abre el archivo `README.md` y **reemplaza TODO el contenido** con este:
 
 ```markdown
 # Sistema de Gestión de Inventario y Ventas
