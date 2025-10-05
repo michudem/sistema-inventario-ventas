@@ -15,17 +15,32 @@ export const AuthProvider = ({ children }) => {
       setUser(JSON.parse(userData));
     }
     setLoading(false);
+
+    // Escuchar evento de sesión expirada
+    const handleSessionExpired = () => {
+      setUser(null);
+    };
+
+    window.addEventListener('sessionExpired', handleSessionExpired);
+    
+    return () => {
+      window.removeEventListener('sessionExpired', handleSessionExpired);
+    };
   }, []);
 
   const login = async (username, password) => {
-    const response = await api.post('/usuarios/login', { username, password });
-    const { token, usuario } = response.data;
-    
-    localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(usuario));
-    setUser(usuario);
-    
-    return response.data;
+    try {
+      const response = await api.post('/usuarios/login', { username, password });
+      const { token, usuario } = response.data;
+      
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(usuario));
+      setUser(usuario);
+      
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
   };
 
   const logout = async () => {
@@ -33,11 +48,11 @@ export const AuthProvider = ({ children }) => {
       await api.post('/usuarios/logout');
     } catch (error) {
       console.error('Error al cerrar sesión:', error);
+    } finally {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      setUser(null);
     }
-    
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    setUser(null);
   };
 
   return (
