@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Search, Plus, Edit2, Trash2, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../hooks/useToast';
+import Toast from './Toast';
 import api from '../services/api';
 
 export default function ProductosView() {
   const { user } = useAuth();
+  const { toast, showToast, hideToast } = useToast();
   const [productos, setProductos] = useState([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -27,7 +30,7 @@ export default function ProductosView() {
       const response = await api.get('/productos');
       setProductos(response.data.productos);
     } catch (error) {
-      console.error('Error al cargar productos:', error);
+      showToast('Error al cargar productos', 'error');
     } finally {
       setLoading(false);
     }
@@ -38,10 +41,10 @@ export default function ProductosView() {
 
     try {
       await api.delete(`/productos/${id}`);
-      alert('Producto eliminado correctamente');
+      showToast('Producto eliminado correctamente', 'success');
       fetchProductos();
     } catch (error) {
-      alert(error.response?.data?.error || 'Error al eliminar producto');
+      showToast(error.response?.data?.error || 'Error al eliminar producto', 'error');
     }
   };
 
@@ -81,16 +84,16 @@ export default function ProductosView() {
 
       if (selectedProduct) {
         await api.put(`/productos/${selectedProduct.id}`, data);
-        alert('Producto actualizado correctamente');
+        showToast('Producto actualizado correctamente', 'success');
       } else {
         await api.post('/productos', data);
-        alert('Producto creado correctamente');
+        showToast('Producto creado correctamente', 'success');
       }
 
       setModalOpen(false);
       fetchProductos();
     } catch (err) {
-      alert(err.response?.data?.error || 'Error al guardar producto');
+      showToast(err.response?.data?.error || 'Error al guardar producto', 'error');
     }
   };
 
@@ -103,6 +106,8 @@ export default function ProductosView() {
 
   return (
     <div>
+      {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
+      
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold">Productos</h2>
         <div className="flex gap-4">
