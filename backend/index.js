@@ -1,103 +1,54 @@
-// ================================================
-// CONFIGURACIÓN INICIAL DEL SERVIDOR
-// Sistema de Gestión de Inventario y Ventas
-// ================================================
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import usuariosRoutes from './routes/usuarios.js';
+import productosRoutes from './routes/productos.js';
+import ventasRoutes from './routes/ventas.js';
+import reportesRoutes from './routes/reportes.js';
 
-// Cargar variables de entorno desde el archivo .env
-require('dotenv').config();
+dotenv.config();
 
-// Importar Express y módulos necesarios
-const express = require('express');
-const cors = require('cors');  // ← AQUÍ
-const pool = require('./database/connection');
-
-// Importar todas las rutas
-const usuariosRoutes = require('./routes/usuarios');
-const productosRoutes = require('./routes/productos');
-const ventasRoutes = require('./routes/ventas');
-const reportesRoutes = require('./routes/reportes');
-
-// Crear la aplicación Express
 const app = express();
-const port = process.env.PORT || 4000;
+const PORT = process.env.PORT || 4000;
 
-// ← CORS DEBE IR AQUÍ (DESPUÉS de crear app)
-app.use(cors({
-  origin: 'http://localhost:5173',
-  credentials: true
-}));
+// Middlewares
+app.use(cors());
+app.use(express.json({ charset: 'utf-8' })); // ✅ AGREGADO: charset UTF-8
+app.use(express.urlencoded({ extended: true, charset: 'utf-8' })); // ✅ AGREGADO
 
-// Middleware para parsear JSON
-app.use(express.json());
-
-// ================================================
-// RUTAS PÚBLICAS
-// ================================================
-
-// Ruta de prueba principal - Verifica el servidor y la BD
-app.get('/', async (req, res) => {
-  try {
-    // Verificar conexión a la base de datos
-    const result = await pool.query('SELECT NOW()');
-    res.json({ 
-      ok: true, 
-      mensaje: "API del Sistema de Inventario funcionando correctamente",
-      hora_servidor: result.rows[0].now
-    });
-  } catch (err) {
-    console.error('Error de conexión a la BD:', err);
-    res.status(500).json({ 
-      ok: false, 
-      error: 'Error de conexión a la base de datos' 
-    });
-  }
+// Headers globales para UTF-8
+app.use((req, res, next) => {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  next();
 });
 
-// Rutas de autenticación (públicas - no requieren token)
+// Rutas
 app.use('/usuarios', usuariosRoutes);
-
-// ================================================
-// RUTAS PROTEGIDAS
-// ================================================
-
-// Todas estas rutas requieren autenticación
-// (El middleware verificarToken está dentro de cada archivo de rutas)
 app.use('/productos', productosRoutes);
 app.use('/ventas', ventasRoutes);
 app.use('/reportes', reportesRoutes);
 
-// ================================================
-// MANEJO DE RUTAS NO ENCONTRADAS (404)
-// ================================================
-
-app.use((req, res) => {
-  res.status(404).json({ 
-    ok: false, 
-    error: 'Ruta no encontrada' 
+// Ruta de prueba
+app.get('/', (req, res) => {
+  res.json({ 
+    mensaje: '✅ API de Inventario funcionando correctamente',
+    version: '1.0.0',
+    encoding: 'UTF-8'
   });
 });
 
-// ================================================
-// ARRANQUE DEL SERVIDOR
-// ================================================
-
-app.listen(port, () => {
-  console.log(`========================================`);
-  console.log(`✓ Servidor corriendo en http://localhost:${port}`);
-  console.log(`✓ Base de datos: PostgreSQL`);
-  console.log(`✓ Presiona Ctrl+C para detener`);
-  console.log(`========================================`);
-  console.log(`\nRutas disponibles:`);
-  console.log(`  POST   /usuarios/registro`);
-  console.log(`  POST   /usuarios/login`);
-  console.log(`  POST   /usuarios/logout`);
-  console.log(`  GET    /productos`);
-  console.log(`  POST   /productos`);
-  console.log(`  PUT    /productos/:id`);
-  console.log(`  DELETE /productos/:id`);
-  console.log(`  POST   /ventas`);
-  console.log(`  GET    /ventas`);
-  console.log(`  GET    /reportes/ventas/diario`);
-  console.log(`  GET    /reportes/ventas/diario/csv`);
-  console.log(`========================================`);
+// Manejo de errores global
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ 
+    error: 'Error interno del servidor',
+    mensaje: err.message 
+  });
 });
+
+app.listen(PORT, () => {
+  console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
+  console.log(`📝 Encoding: UTF-8`);
+});
+
+export default app;
