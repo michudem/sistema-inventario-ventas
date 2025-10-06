@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { Plus, Minus, Trash2, ShoppingCart } from 'lucide-react';
 import { useToast } from '../hooks/useToast';
 import Toast from './Toast';
-import api from '../services/api';
+import { productosService, ventasService } from '../services';
+import { MESSAGES } from '../constants/messages';
 
 export default function VentasView() {
   const { toast, showToast, hideToast } = useToast();
@@ -12,80 +13,94 @@ export default function VentasView() {
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    fetchProductos();
+    cargarProductos();
   }, []);
 
-  const fetchProductos = async () => {
+  const cargarProductos = async () => {
     try {
-      const response = await api.get('/productos');
-      setProductos(response.data.productos);
+      const data = await productosService.obtenerTodos();
+      setProductos(data);
     } catch (error) {
-      showToast('Error al cargar productos', 'error');
+      showToast(MESSAGES.PRODUCTS.ERROR_LOAD, 'error');
     }
+  };
+
+  const productoSinStock = (producto) => producto.cantidad <= 0;
+
+  const obtenerCantidadEnCarrito = (productoId) => {
+    const item = carrito.find(item => item.id === productoId);
+    return item ? item.cantidad : 0;
+  };
+
+  const stockInsuficienteEnCarrito = (producto) => {
+    const cantidadEnCarrito = obtenerCantidadEnCarrito(producto.id);
+    return cantidadEnCarrito >= producto.cantidad;
+  };
+
+  const productoEstaEnCarrito = (productoId) => {
+    return carrito.some(item => item.id === productoId);
   };
 
   const agregarProducto = (producto) => {
-    // Validación 1: Verificar stock disponible
-    if (producto.cantidad <= 0) {
-      showToast('Producto sin stock disponible', 'error');
+    if (productoSinStock(producto)) {
+      showToast(MESSAGES.PRODUCTS.NO_STOCK, 'error');
       return;
     }
 
-    const existing = carrito.find(item => item.id === producto.id);
-    const cantidadEnCarrito = existing ? existing.cantidad : 0;
-    
-    // Validación 2: Verificar si ya tiene todo el stock en el carrito
-    if (cantidadEnCarrito >= producto.cantidad) {
-      showToast(
-        `Stock insuficiente. Solo quedan ${producto.cantidad} unidades disponibles`,
-        'error'
-      );
+    if (stockInsuficienteEnCarrito(producto)) {
+      showToast(MESSAGES.PRODUCTS.INSUFFICIENT_STOCK(producto.cantidad), 'error');
       return;
     }
 
-    if (existing) {
-      setCarrito(carrito.map(item => 
-        item.id === producto.id 
+    if (productoEstaEnCarrito(producto.id)) {
+      incrementarCantidad(producto.id);
+      showToast(MESSAGES.PRODUCTS.QUANTITY_UPDATED, 'success');
+    } else {
+      agregarNuevoProducto(producto);
+      showToast(MESSAGES.PRODUCTS.ADDED_TO_CART, 'success');
+    }
+  };
+
+  const incrementarCantidad = (productoId) => {
+    setCarrito(
+      carrito.map(item => 
+        item.id === productoId 
           ? { ...item, cantidad: item.cantidad + 1 } 
           : item
-      ));
-      showToast('Cantidad actualizada en el carrito', 'success');
-    } else {
-      setCarrito([...carrito, { ...producto, cantidad: 1 }]);
-      showToast('Producto agregado al carrito', 'success');
-    }
+      )
+    );
   };
 
-  const cambiarCantidad = (id, delta) => {
-    const producto = productos.find(p => p.id === id);
+  const agregarNuevoProducto = (producto) => {
+    setCarrito([...carrito, { ...producto, cantidad: 1 }]);
+  };
+
+  const cambiarCantidad = (productoId, cambio) => {
+    const producto = productos.find(p => p.id === productoId);
     
-    setCarrito(carrito.map(item => {
-      if (item.id === id) {
-        const nuevaCantidad = item.cantidad + delta;
-        
-        // Validación: No puede ser mayor al stock
-        if (nuevaCantidad > producto.cantidad) {
-          showToast(
-            `Stock insuficiente. Solo hay ${producto.cantidad} unidades disponibles`,
-            'error'
-          );
-          return item;
-        }
-        
-        // Si la cantidad es 0 o menor, eliminar del carrito
-        if (nuevaCantidad <= 0) {
-          return null;
-        }
-        
-        return { ...item, cantidad: nuevaCantidad };
-      }
-      return item;
-    }).filter(item => item !== null));
+    setCarrito(
+      carrito
+        .map(item => {
+          if (item.id !== productoId) return item;
+          
+          const nuevaCantidad = item.cantidad + cambio;
+          
+          if (nuevaCantidad > producto.cantidad) {
+            showToast(MESSAGES.PRODUCTS.INSUFFICIENT_STOCK(producto.cantidad), 'error');
+            return item;
+          }
+          
+          if (nuevaCantidad <= 0) return null;
+          
+          return { ...item, cantidad: nuevaCantidad };
+        })
+        .filter(Boolean)
+    );
   };
 
-  const eliminarDelCarrito = (id) => {
-    setCarrito(carrito.filter(item => item.id !== id));
-    showToast('Producto eliminado del carrito', 'info');
+  const eliminarDelCarrito = (productoId) => {
+    setCarrito(carrito.filter(item => item.id !== productoId));
+    showToast(MESSAGES.PRODUCTS.REMOVED_FROM_CART, 'info');
   };
 
   const vaciarCarrito = () => {
@@ -93,43 +108,46 @@ export default function VentasView() {
     
     if (window.confirm('¿Estás seguro de vaciar el carrito?')) {
       setCarrito([]);
-      showToast('Carrito vaciado', 'info');
+      showToast(MESSAGES.CART.CLEARED, 'info');
     }
+  };
+
+  const prepararProductosParaVenta = () => {
+    return carrito.map(item => ({
+      producto_id: item.id,
+      cantidad: item.cantidad
+    }));
   };
 
   const finalizarVenta = async () => {
     if (carrito.length === 0) {
-      showToast('El carrito está vacío', 'error');
+      showToast(MESSAGES.CART.EMPTY, 'error');
       return;
     }
 
     setLoading(true);
+    
     try {
-      const productos = carrito.map(item => ({
-        producto_id: item.id,
-        cantidad: item.cantidad
-      }));
-
-      const response = await api.post('/ventas', { productos });
+      const productosVenta = prepararProductosParaVenta();
+      const venta = await ventasService.crear(productosVenta);
       
-      const descargar = window.confirm(
+      const deseaDescargar = window.confirm(
         '¡Venta registrada exitosamente! ¿Deseas descargar el ticket?'
       );
       
-      if (descargar) {
-        await descargarTicket(response.data.venta);
+      if (deseaDescargar) {
+        await descargarTicket(venta);
       }
       
-      showToast('Venta registrada correctamente', 'success');
+      showToast(MESSAGES.SALES.SUCCESS, 'success');
       setCarrito([]);
-      fetchProductos(); // Actualizar stock
+      cargarProductos();
     } catch (error) {
-      const errorMsg = error.response?.data?.error || 'Error al registrar venta';
-      showToast(errorMsg, 'error');
+      const mensajeError = error.response?.data?.error || MESSAGES.SALES.ERROR;
+      showToast(mensajeError, 'error');
       
-      // Si hay error de stock, refrescar productos
-      if (errorMsg.includes('Stock insuficiente') || errorMsg.includes('stock')) {
-        fetchProductos();
+      if (mensajeError.includes('stock')) {
+        cargarProductos();
       }
     } finally {
       setLoading(false);
@@ -138,173 +156,185 @@ export default function VentasView() {
 
   const descargarTicket = async (venta) => {
     try {
-      const response = await api.get(`/ventas/${venta.id}/ticket-pdf`, {
-        responseType: 'blob'
-      });
-      
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `ticket_${venta.numero_transaccion}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      const blob = await ventasService.descargarTicket(venta.id);
+      crearYDescargarArchivo(blob, `ticket_${venta.numero_transaccion}.pdf`);
     } catch (error) {
-      showToast('Error al descargar ticket', 'error');
+      showToast(MESSAGES.SALES.TICKET_ERROR, 'error');
     }
   };
 
-  const total = carrito.reduce((sum, item) => sum + item.precio_unitario * item.cantidad, 0);
-  const totalItems = carrito.reduce((sum, item) => sum + item.cantidad, 0);
+  const crearYDescargarArchivo = (blob, nombreArchivo) => {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = nombreArchivo;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  };
 
-  const productosFiltrados = productos.filter(p => 
-    p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.codigo.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const calcularTotal = () => {
+    return carrito.reduce(
+      (total, item) => total + (item.precio_unitario * item.cantidad), 
+      0
+    );
+  };
+
+  const calcularTotalItems = () => {
+    return carrito.reduce((total, item) => total + item.cantidad, 0);
+  };
+
+  const filtrarProductos = () => {
+    const termino = searchTerm.toLowerCase();
+    return productos.filter(producto => 
+      producto.nombre.toLowerCase().includes(termino) ||
+      producto.codigo.toLowerCase().includes(termino)
+    );
+  };
+
+  const total = calcularTotal();
+  const totalItems = calcularTotalItems();
+  const productosFiltrados = filtrarProductos();
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
-      
-      {/* Panel de Productos */}
-      <div className="bg-white rounded-xl shadow-sm p-6">
-        <h2 className="text-xl font-bold mb-4">Productos Disponibles</h2>
-        
-        <input
-          type="text"
-          placeholder="Buscar por nombre o código..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full px-4 py-2 border rounded-lg mb-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        />
 
-        <div className="space-y-2 max-h-[500px] overflow-y-auto">
-          {productosFiltrados.length === 0 ? (
-            <div className="text-center py-8 text-gray-400">
-              No se encontraron productos
-            </div>
-          ) : (
-            productosFiltrados.map(p => (
-              <div 
-                key={p.id} 
-                className="flex justify-between items-center p-3 hover:bg-gray-50 rounded-lg border transition"
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <ShoppingCart className="w-8 h-8 text-blue-600" />
+          <h1 className="text-3xl font-bold text-gray-800">Nueva Venta</h1>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <input
+            type="text"
+            placeholder="Buscar producto..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 mb-4"
+          />
+
+          <div className="max-h-96 overflow-y-auto space-y-2">
+            {productosFiltrados.map((producto) => (
+              <div
+                key={producto.id}
+                className="flex justify-between items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50"
               >
                 <div className="flex-1">
-                  <p className="font-semibold">{p.nombre}</p>
+                  <h3 className="font-semibold text-gray-800">{producto.nombre}</h3>
                   <p className="text-sm text-gray-600">
-                    Código: {p.codigo} | ${p.precio_unitario.toLocaleString()}
-                  </p>
-                  <p className={`text-xs font-semibold ${
-                    p.cantidad > 20 ? 'text-green-600' : 
-                    p.cantidad > 0 ? 'text-orange-600' : 'text-red-600'
-                  }`}>
-                    Stock: {p.cantidad} unidades
+                    ${producto.precio_unitario.toLocaleString('es-CO')} - Stock: {producto.cantidad}
                   </p>
                 </div>
                 <button
-                  onClick={() => agregarProducto(p)}
-                  disabled={p.cantidad <= 0}
-                  className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                  onClick={() => agregarProducto(producto)}
+                  disabled={productoSinStock(producto) || stockInsuficienteEnCarrito(producto)}
+                  className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
                 >
-                  {p.cantidad <= 0 ? 'Sin Stock' : 'Agregar'}
+                  <Plus className="w-5 h-5" />
                 </button>
               </div>
-            ))
-          )}
+            ))}
+
+            {productosFiltrados.length === 0 && (
+              <p className="text-center text-gray-500 py-8">
+                No se encontraron productos
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Panel de Carrito */}
-      <div className="bg-white rounded-xl shadow-sm p-6">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold">Carrito de Compra</h2>
+      <div className="space-y-4">
+        <div className="flex justify-between items-center">
+          <h2 className="text-2xl font-bold text-gray-800">Carrito</h2>
           {carrito.length > 0 && (
-            <span className="bg-blue-500 text-white px-3 py-1 rounded-full text-sm font-semibold">
-              {totalItems} {totalItems === 1 ? 'item' : 'items'}
-            </span>
+            <button
+              onClick={vaciarCarrito}
+              className="text-red-600 hover:text-red-800 text-sm"
+            >
+              Vaciar carrito
+            </button>
           )}
         </div>
-        
-        {carrito.length === 0 ? (
-          <div className="text-center py-16">
-            <ShoppingCart size={64} className="mx-auto text-gray-300 mb-4" />
-            <p className="text-gray-400 text-lg">Carrito vacío</p>
-            <p className="text-gray-400 text-sm mt-2">Agrega productos para comenzar</p>
-          </div>
-        ) : (
-          <>
-            <div className="space-y-2 mb-6 max-h-[350px] overflow-y-auto">
-              {carrito.map(item => (
-                <div key={item.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                  <div className="flex-1">
-                    <p className="font-semibold">{item.nombre}</p>
-                    <p className="text-sm text-gray-600">
-                      ${item.precio_unitario.toLocaleString()} c/u
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <button 
-                      onClick={() => cambiarCantidad(item.id, -1)} 
-                      className="p-1 hover:bg-gray-200 rounded transition"
-                      title="Reducir cantidad"
-                    >
-                      <Minus size={16} />
-                    </button>
-                    <span className="font-semibold w-8 text-center">{item.cantidad}</span>
-                    <button 
-                      onClick={() => cambiarCantidad(item.id, 1)} 
-                      className="p-1 hover:bg-gray-200 rounded transition"
-                      title="Aumentar cantidad"
-                    >
-                      <Plus size={16} />
-                    </button>
-                    <span className="font-bold ml-4 w-24 text-right">
-                      ${(item.precio_unitario * item.cantidad).toLocaleString()}
-                    </span>
-                    <button
-                      onClick={() => eliminarDelCarrito(item.id)}
-                      className="p-1 hover:bg-red-100 text-red-600 rounded ml-2 transition"
-                      title="Eliminar del carrito"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
-              ))}
+
+        <div className="bg-white rounded-lg shadow-md p-6">
+          {carrito.length === 0 ? (
+            <div className="text-center py-12">
+              <ShoppingCart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500">El carrito está vacío</p>
             </div>
-            
-            <div className="border-t pt-4 space-y-3">
-              <div className="flex justify-between text-sm text-gray-600">
-                <span>Productos:</span>
-                <span>{totalItems} {totalItems === 1 ? 'unidad' : 'unidades'}</span>
+          ) : (
+            <>
+              <div className="max-h-80 overflow-y-auto space-y-3 mb-4">
+                {carrito.map((item) => (
+                  <div key={item.id} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg">
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-gray-800">{item.nombre}</h3>
+                      <p className="text-sm text-gray-600">
+                        ${item.precio_unitario.toLocaleString('es-CO')} c/u
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => cambiarCantidad(item.id, -1)}
+                        className="bg-gray-200 p-1 rounded hover:bg-gray-300"
+                      >
+                        <Minus className="w-4 h-4" />
+                      </button>
+                      
+                      <span className="w-8 text-center font-semibold">
+                        {item.cantidad}
+                      </span>
+                      
+                      <button
+                        onClick={() => cambiarCantidad(item.id, 1)}
+                        className="bg-gray-200 p-1 rounded hover:bg-gray-300"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+
+                      <button
+                        onClick={() => eliminarDelCarrito(item.id)}
+                        className="text-red-600 hover:text-red-800 ml-2"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <div className="text-right min-w-24">
+                      <p className="font-semibold text-gray-800">
+                        ${(item.precio_unitario * item.cantidad).toLocaleString('es-CO')}
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
-              
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-xl font-bold">Total:</span>
-                <span className="text-2xl font-bold text-blue-600">
-                  ${total.toLocaleString()}
-                </span>
+
+              <div className="border-t pt-4 space-y-2">
+                <div className="flex justify-between text-gray-600">
+                  <span>Total items:</span>
+                  <span className="font-semibold">{totalItems}</span>
+                </div>
+                <div className="flex justify-between text-xl font-bold text-gray-800">
+                  <span>Total:</span>
+                  <span>${total.toLocaleString('es-CO')}</span>
+                </div>
               </div>
-              
+
               <button
-                onClick={vaciarCarrito}
-                disabled={loading}
-                className="w-full bg-gray-500 text-white py-2 rounded-lg hover:bg-gray-600 transition disabled:opacity-50 mb-2"
-              >
-                Vaciar Carrito
-              </button>
-              
-              <button 
                 onClick={finalizarVenta}
                 disabled={loading}
-                className="w-full bg-green-500 text-white py-3 rounded-lg font-semibold hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                className="w-full mt-4 bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition-colors disabled:bg-green-300 disabled:cursor-not-allowed font-semibold"
               >
                 {loading ? 'Procesando...' : 'Finalizar Venta'}
               </button>
-            </div>
-          </>
-        )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
