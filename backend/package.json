@@ -1,13 +1,14 @@
 {
-  "name": "backend",
+   "name": "backend",
   "version": "1.0.0",
+  "type": "module",   
   "description": "",
   "main": "index.js",
   "scripts": {
     "dev": "nodemon index.js"
   },
   "keywords": [],
-  "author": "",
+  "author": "Michel Yagari",
   "license": "ISC",
   "dependencies": {
     "bcryptjs": "^3.0.2",
