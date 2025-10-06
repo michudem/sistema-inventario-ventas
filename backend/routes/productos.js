@@ -1,6 +1,3 @@
-// ================================================
-// RUTAS DE PRODUCTOS CON AUTENTICACIÓN Y AUTORIZACIÓN
-// ================================================
 
 const express = require('express');
 const pool = require('../database/connection');
@@ -8,13 +5,10 @@ const { verificarToken, verificarRol } = require('../middlewares/auth');
 
 const router = express.Router();
 
-// TODAS las rutas requieren autenticación
+
 router.use(verificarToken);
 
-// ================================================
-// LISTAR PRODUCTOS
-// ================================================
-// Cualquier usuario autenticado puede ver productos
+
 router.get('/', async (req, res) => {
   try {
     const result = await pool.query(
@@ -27,10 +21,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// ================================================
-// OBTENER PRODUCTO POR ID
-// ================================================
-// Cualquier usuario autenticado puede ver un producto específico
+
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -51,15 +42,12 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// ================================================
-// CREAR PRODUCTO
-// ================================================
-// Solo ADMIN puede crear productos
+
 router.post('/', verificarRol('ADMIN'), async (req, res) => {
   try {
     const { codigo, nombre, descripcion, precio_unitario, cantidad } = req.body;
 
-    // Validar campos obligatorios
+ 
     if (!codigo || !nombre || precio_unitario === undefined || cantidad === undefined) {
       return res.status(400).json({ 
         ok: false, 
@@ -67,7 +55,7 @@ router.post('/', verificarRol('ADMIN'), async (req, res) => {
       });
     }
 
-    // Validar tipos de datos
+
     if (typeof precio_unitario !== 'number' || precio_unitario < 0) {
       return res.status(400).json({ 
         ok: false, 
@@ -82,7 +70,7 @@ router.post('/', verificarRol('ADMIN'), async (req, res) => {
       });
     }
 
-    // Verificar si el código ya existe
+
     const codigoExistente = await pool.query(
       'SELECT id FROM productos WHERE codigo = $1',
       [codigo]
@@ -95,7 +83,7 @@ router.post('/', verificarRol('ADMIN'), async (req, res) => {
       });
     }
 
-    // Insertar el nuevo producto
+ 
     const result = await pool.query(
       'INSERT INTO productos (codigo, nombre, descripcion, precio_unitario, cantidad) VALUES ($1, $2, $3, $4, $5) RETURNING *',
       [codigo, nombre, descripcion || null, precio_unitario, cantidad]
@@ -109,8 +97,8 @@ router.post('/', verificarRol('ADMIN'), async (req, res) => {
   } catch (err) {
     console.error('Error al crear producto:', err);
     
-    // Manejar error de código duplicado a nivel de base de datos
-    if (err.code === '23505') { // Código de error de PostgreSQL para violación de unique constraint
+   
+    if (err.code === '23505') { 
       return res.status(409).json({ 
         ok: false, 
         error: 'El código del producto ya existe' 
@@ -121,10 +109,7 @@ router.post('/', verificarRol('ADMIN'), async (req, res) => {
   }
 });
 
-// ================================================
-// ACTUALIZAR PRODUCTO
-// ================================================
-// Solo ADMIN puede actualizar productos
+
 router.put('/:id', verificarRol('ADMIN'), async (req, res) => {
   try {
     const { id } = req.params;
@@ -138,7 +123,7 @@ router.put('/:id', verificarRol('ADMIN'), async (req, res) => {
       });
     }
 
-    // Validar tipos de datos si están presentes
+  
     if (precio_unitario !== undefined) {
       if (typeof precio_unitario !== 'number' || precio_unitario < 0) {
         return res.status(400).json({ 
@@ -157,7 +142,7 @@ router.put('/:id', verificarRol('ADMIN'), async (req, res) => {
       }
     }
 
-    // Verificar si el producto existe
+ 
     const productoExistente = await pool.query(
       'SELECT * FROM productos WHERE id = $1',
       [id]
@@ -169,7 +154,7 @@ router.put('/:id', verificarRol('ADMIN'), async (req, res) => {
 
     const productoActual = productoExistente.rows[0];
 
-    // Si se está actualizando el código, verificar que no esté duplicado
+
     if (codigo && codigo !== productoActual.codigo) {
       const codigoExistente = await pool.query(
         'SELECT id FROM productos WHERE codigo = $1 AND id != $2',
@@ -184,7 +169,7 @@ router.put('/:id', verificarRol('ADMIN'), async (req, res) => {
       }
     }
 
-    // Construir objeto con valores actualizados (mantener los existentes si no se envían nuevos)
+
     const datosActualizados = {
       codigo: codigo !== undefined ? codigo : productoActual.codigo,
       nombre: nombre !== undefined ? nombre : productoActual.nombre,
@@ -193,7 +178,7 @@ router.put('/:id', verificarRol('ADMIN'), async (req, res) => {
       cantidad: cantidad !== undefined ? cantidad : productoActual.cantidad
     };
 
-    // Actualizar el producto
+
     const result = await pool.query(
       'UPDATE productos SET codigo=$1, nombre=$2, descripcion=$3, precio_unitario=$4, cantidad=$5 WHERE id=$6 RETURNING *',
       [
@@ -226,10 +211,7 @@ router.put('/:id', verificarRol('ADMIN'), async (req, res) => {
   }
 });
 
-// ================================================
-// ELIMINAR PRODUCTO
-// ================================================
-// Solo ADMIN puede eliminar productos
+
 router.delete('/:id', verificarRol('ADMIN'), async (req, res) => {
   try {
     const { id } = req.params;
@@ -244,7 +226,7 @@ router.delete('/:id', verificarRol('ADMIN'), async (req, res) => {
       return res.status(404).json({ ok: false, error: 'Producto no encontrado' });
     }
 
-    // Verificar si el producto está en alguna venta
+
     const ventasConProducto = await pool.query(
       'SELECT COUNT(*) as total FROM detalle_ventas WHERE producto_id = $1',
       [id]
@@ -257,7 +239,7 @@ router.delete('/:id', verificarRol('ADMIN'), async (req, res) => {
       });
     }
 
-    // Eliminar el producto
+
     const result = await pool.query(
       'DELETE FROM productos WHERE id=$1 RETURNING *',
       [id]

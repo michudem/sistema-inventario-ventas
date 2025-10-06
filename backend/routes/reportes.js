@@ -1,6 +1,4 @@
-// ================================================
-// MÓDULO DE REPORTES DE VENTAS
-// ================================================
+
 
 const express = require('express');
 const pool = require('../database/connection');
@@ -8,20 +6,17 @@ const { verificarToken } = require('../middlewares/auth');
 const PDFDocument = require('pdfkit');
 const router = express.Router();
 
-// Todas las rutas requieren autenticación
+
 router.use(verificarToken);
 
-// ========================
-// REPORTE DIARIO DE VENTAS (JSON)
-// ========================
 router.get('/ventas/diario', async (req, res) => {
   try {
     const { fecha } = req.query;
     
-    // Si no se proporciona fecha, usar hoy
+    
     const fechaConsulta = fecha || new Date().toISOString().split('T')[0];
 
-    // 1. Obtener número total de transacciones del día
+  
     const transaccionesResult = await pool.query(
       `SELECT COUNT(*) as total_transacciones, 
               COALESCE(SUM(total), 0) as ingresos_totales
@@ -30,7 +25,6 @@ router.get('/ventas/diario', async (req, res) => {
       [fechaConsulta]
     );
 
-    // 2. Obtener productos vendidos con cantidades y totales
     const productosResult = await pool.query(
       `SELECT 
          p.id,
@@ -48,7 +42,7 @@ router.get('/ventas/diario', async (req, res) => {
       [fechaConsulta]
     );
 
-    // 3. Obtener detalle de todas las ventas del día
+
     const ventasResult = await pool.query(
       `SELECT 
          v.id,
@@ -74,7 +68,7 @@ router.get('/ventas/diario', async (req, res) => {
       [fechaConsulta]
     );
 
-    // Construir respuesta
+
     const reporte = {
       fecha: fechaConsulta,
       resumen: {
@@ -106,9 +100,7 @@ router.get('/ventas/diario', async (req, res) => {
   }
 });
 
-// ========================
-// EXPORTAR REPORTE EN CSV
-// ========================
+
 router.get('/ventas/diario/csv', async (req, res) => {
   try {
     const { fecha } = req.query;
@@ -173,9 +165,7 @@ router.get('/ventas/diario/csv', async (req, res) => {
   }
 });
 
-// ========================
-// EXPORTAR REPORTE DIARIO EN PDF
-// ========================
+
 router.get('/ventas/diario/pdf', async (req, res) => {
   try {
     const { fecha } = req.query;
@@ -219,17 +209,16 @@ router.get('/ventas/diario/pdf', async (req, res) => {
       [fechaConsulta]
     );
 
-    // Crear el documento PDF
+
     const doc = new PDFDocument({ margin: 50 });
 
     // Configurar headers para descarga
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=reporte_ventas_${fechaConsulta}.pdf`);
 
-    // Pipe del PDF a la respuesta
+
     doc.pipe(res);
 
-    // ===== ENCABEZADO =====
     doc.fontSize(20)
        .font('Helvetica-Bold')
        .text('REPORTE DE VENTAS DIARIO', { align: 'center' });
@@ -241,7 +230,7 @@ router.get('/ventas/diario/pdf', async (req, res) => {
     
     doc.moveDown(1);
 
-    // ===== RESUMEN =====
+  
     doc.fontSize(14)
        .font('Helvetica-Bold')
        .text('RESUMEN DEL DÍA');
@@ -256,14 +245,14 @@ router.get('/ventas/diario/pdf', async (req, res) => {
     
     doc.moveDown(1.5);
 
-    // ===== PRODUCTOS VENDIDOS =====
+
     doc.fontSize(14)
        .font('Helvetica-Bold')
        .text('PRODUCTOS VENDIDOS');
     
     doc.moveDown(0.5);
 
-    // Tabla de productos
+
     const tableTop = doc.y;
     const col1 = 50;
     const col2 = 140;
@@ -271,7 +260,7 @@ router.get('/ventas/diario/pdf', async (req, res) => {
     const col4 = 360;
     const col5 = 460;
 
-    // Encabezados de tabla
+
     doc.fontSize(10)
        .font('Helvetica-Bold')
        .text('Código', col1, tableTop)
@@ -280,14 +269,14 @@ router.get('/ventas/diario/pdf', async (req, res) => {
        .text('P. Unitario', col4, tableTop)
        .text('Total', col5, tableTop);
 
-    // Línea debajo de encabezados
+
     doc.moveTo(col1, doc.y + 5)
        .lineTo(550, doc.y + 5)
        .stroke();
 
     doc.moveDown(0.5);
 
-    // Datos de productos
+
     doc.font('Helvetica');
     productosResult.rows.forEach((producto, index) => {
       const y = doc.y;
@@ -300,7 +289,7 @@ router.get('/ventas/diario/pdf', async (req, res) => {
       
       doc.moveDown(0.3);
 
-      // Nueva página si se llena
+
       if (doc.y > 700) {
         doc.addPage();
       }
@@ -308,9 +297,7 @@ router.get('/ventas/diario/pdf', async (req, res) => {
 
     doc.moveDown(1.5);
 
-    // ===== DETALLE DE VENTAS =====
     if (ventasResult.rows.length > 0) {
-        // Nueva página si queda poco espacio
         if (doc.y > 600) {
             doc.addPage();
         }
@@ -321,7 +308,7 @@ router.get('/ventas/diario/pdf', async (req, res) => {
         
         doc.moveDown(0.5);
 
-        // Encabezados de la tabla
+
         const vTableTop = doc.y;
         
         doc.fontSize(10)
@@ -331,14 +318,14 @@ router.get('/ventas/diario/pdf', async (req, res) => {
             .text('Cajero', 330, vTableTop, { width: 100 })
             .text('Total', 440, vTableTop, { width: 100, align: 'right' });
 
-        // Línea separadora
+
         doc.moveTo(50, doc.y + 3)
             .lineTo(550, doc.y + 3)
             .stroke();
 
         doc.moveDown(0.3);
 
-        // Datos de las ventas
+
         doc.font('Helvetica').fontSize(9);
         
         ventasResult.rows.forEach(venta => {
@@ -361,7 +348,7 @@ router.get('/ventas/diario/pdf', async (req, res) => {
         });
     }
 
-    // ===== PIE DE PÁGINA =====
+
     const pages = doc.bufferedPageRange();
     for (let i = 0; i < pages.count; i++) {
       doc.switchToPage(i);
@@ -376,7 +363,7 @@ router.get('/ventas/diario/pdf', async (req, res) => {
          );
     }
 
-    // Finalizar el PDF
+
     doc.end();
 
   } catch (err) {
@@ -388,9 +375,7 @@ router.get('/ventas/diario/pdf', async (req, res) => {
   }
 });
 
-// ========================
-// REPORTE POR RANGO DE FECHAS
-// ========================
+
 router.get('/ventas/rango', async (req, res) => {
   try {
     const { fecha_inicio, fecha_fin } = req.query;
@@ -402,7 +387,7 @@ router.get('/ventas/rango', async (req, res) => {
       });
     }
 
-    // Resumen del rango
+
     const resumenResult = await pool.query(
       `SELECT 
          COUNT(*) as total_transacciones,
@@ -414,7 +399,7 @@ router.get('/ventas/rango', async (req, res) => {
       [fecha_inicio, fecha_fin]
     );
 
-    // Productos vendidos en el rango
+ 
     const productosResult = await pool.query(
       `SELECT 
          p.codigo,
@@ -431,7 +416,7 @@ router.get('/ventas/rango', async (req, res) => {
       [fecha_inicio, fecha_fin]
     );
 
-    // Ventas por día
+ 
     const ventasPorDiaResult = await pool.query(
       `SELECT 
          DATE(fecha) as fecha,
@@ -464,9 +449,7 @@ router.get('/ventas/rango', async (req, res) => {
   }
 });
 
-// ========================
-// REPORTE DE PRODUCTOS MÁS VENDIDOS
-// ========================
+
 router.get('/productos/mas-vendidos', async (req, res) => {
   try {
     const { limit = 10 } = req.query;

@@ -11,33 +11,29 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-// Middlewares
 app.use(cors());
-app.use(express.json({ charset: 'utf-8' })); // ✅ AGREGADO: charset UTF-8
-app.use(express.urlencoded({ extended: true, charset: 'utf-8' })); // ✅ AGREGADO
+app.use(express.json({ charset: 'utf-8' })); 
+app.use(express.urlencoded({ extended: true, charset: 'utf-8' })); 
 
-// Headers globales para UTF-8
 app.use((req, res, next) => {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   next();
 });
 
-// Rutas
 app.use('/usuarios', usuariosRoutes);
 app.use('/productos', productosRoutes);
 app.use('/ventas', ventasRoutes);
 app.use('/reportes', reportesRoutes);
 
-// Ruta de prueba
 app.get('/', (req, res) => {
   res.json({ 
-    mensaje: '✅ API de Inventario funcionando correctamente',
+    mensaje: 'API de Inventario funcionando correctamente',
     version: '1.0.0',
     encoding: 'UTF-8'
   });
 });
 
-// Manejo de errores global
+
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ 
@@ -47,8 +43,8 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
-  console.log(`📝 Encoding: UTF-8`);
+  console.log(` Servidor corriendo en http://localhost:${PORT}`);
+  console.log(` Encoding: UTF-8`);
 });
 
 export default app;

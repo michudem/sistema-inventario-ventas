@@ -6,23 +6,21 @@ const pool = require('../database/connection');
 
 const router = express.Router();
 
-// ========================
-// Registrar usuario
-// ========================
+
 router.post('/registro', async (req, res) => {
   try {
     const { username, password, rol } = req.body;
 
-    // Validar datos
+  
     if (!username || !password || !rol) {
       return res.status(400).json({ ok: false, error: 'Faltan datos' });
     }
 
-    // Verificar si ya hay usuarios registrados
+
     const totalUsuarios = await pool.query('SELECT COUNT(*) FROM usuarios');
     const hayUsuarios = parseInt(totalUsuarios.rows[0].count) > 0;
 
-    // Si ya hay usuarios, exigir token y rol ADMIN
+
     if (hayUsuarios) {
       const authHeader = req.headers['authorization'];
       if (!authHeader) {
@@ -40,12 +38,12 @@ router.post('/registro', async (req, res) => {
       }
     }
 
-    // Validar rol
+
     if (rol !== 'ADMIN' && rol !== 'CAJERO') {
       return res.status(400).json({ ok: false, error: 'Rol inválido' });
     }
 
-    // Encriptar contraseña y registrar usuario
+
     const hashedPassword = await bcrypt.hash(password, 10);
     const result = await pool.query(
       'INSERT INTO usuarios (username, password, rol) VALUES ($1, $2, $3) RETURNING id, username, rol, creado_en',
@@ -62,22 +60,19 @@ router.post('/registro', async (req, res) => {
   }
 });
 
-// ========================
-// Login usuario con registro de intentos
-// ========================
 router.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
 
-    // Obtener IP y User-Agent del cliente
+
     const ip = req.ip || req.connection.remoteAddress || 'Desconocida';
     const userAgent = req.headers['user-agent'] || 'Desconocido';
 
-    // Buscar usuario por username
+
     const result = await pool.query('SELECT * FROM usuarios WHERE username=$1', [username]);
     
     if (result.rows.length === 0) {
-      // REGISTRAR INTENTO FALLIDO - Usuario no encontrado
+
       await pool.query(
         'INSERT INTO intentos_inicio_sesion (usuario, exitoso, ip, user_agent) VALUES ($1, $2, $3, $4)',
         [username, false, ip, userAgent]
@@ -92,7 +87,7 @@ router.post('/login', async (req, res) => {
     const validPassword = await bcrypt.compare(password, user.password);
     
     if (!validPassword) {
-      // REGISTRAR INTENTO FALLIDO - Contraseña incorrecta
+  
       await pool.query(
         'INSERT INTO intentos_inicio_sesion (usuario, exitoso, ip, user_agent) VALUES ($1, $2, $3, $4)',
         [username, false, ip, userAgent]
@@ -101,13 +96,13 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ ok: false, error: 'Contraseña incorrecta' });
     }
 
-    // REGISTRAR INTENTO EXITOSO
+
     await pool.query(
       'INSERT INTO intentos_inicio_sesion (usuario, exitoso, ip, user_agent) VALUES ($1, $2, $3, $4)',
       [username, true, ip, userAgent]
     );
 
-    // Generar token JWT
+
     const token = jwt.sign(
       { id: user.id, username: user.username, rol: user.rol },
       process.env.JWT_SECRET,
@@ -129,9 +124,6 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// ========================
-// Ver intentos de inicio de sesión (solo ADMIN)
-// ========================
 router.get('/intentos-login', async (req, res) => {
   try {
     const { limit = 50, exitoso } = req.query;
@@ -139,7 +131,7 @@ router.get('/intentos-login', async (req, res) => {
     let query = 'SELECT * FROM intentos_inicio_sesion';
     const params = [];
 
-    // Filtro opcional por éxito/fallo
+
     if (exitoso !== undefined) {
       query += ' WHERE exitoso = $1';
       params.push(exitoso === 'true');
@@ -161,9 +153,7 @@ router.get('/intentos-login', async (req, res) => {
   }
 });
 
-// ========================
-// Ver intentos de un usuario específico (solo ADMIN)
-// ========================
+
 router.get('/intentos-login/:username', async (req, res) => {
   try {
     const { username } = req.params;
@@ -187,14 +177,12 @@ router.get('/intentos-login/:username', async (req, res) => {
 });
 
 
-// ========================
-// Cerrar sesión (logout con blacklist)
-// ========================
+
 router.post('/logout', verificarToken, async (req, res) => {
   try {
     const token = req.headers['authorization'].split(' ')[1];
     
-    // Agregar token a la blacklist
+
     await pool.query(
       'INSERT INTO tokens_revocados (token, usuario_id) VALUES ($1, $2)',
       [token, req.user.id]
@@ -210,12 +198,9 @@ router.post('/logout', verificarToken, async (req, res) => {
   }
 });
 
-// ========================
-// Limpiar tokens revocados antiguos (solo ADMIN)
-// ========================
+
 router.delete('/limpiar-tokens', verificarToken, verificarRol('ADMIN'), async (req, res) => {
   try {
-    // Eliminar tokens revocados hace más de 8 horas (ya expiraron)
     const result = await pool.query(
       `DELETE FROM tokens_revocados 
        WHERE revocado_en < NOW() - INTERVAL '8 hours' 
@@ -233,9 +218,7 @@ router.delete('/limpiar-tokens', verificarToken, verificarRol('ADMIN'), async (r
   }
 });
 
-// ========================
-// Ver tokens revocados (solo ADMIN - para auditoría)
-// ========================
+
 router.get('/tokens-revocados', verificarToken, verificarRol('ADMIN'), async (req, res) => {
   try {
     const { limit = 50 } = req.query;
@@ -262,9 +245,7 @@ router.get('/tokens-revocados', verificarToken, verificarRol('ADMIN'), async (re
 
 
 
-// ========================
-// LISTAR TODOS LOS USUARIOS (solo ADMIN)
-// ========================
+
 router.get('/', verificarToken, verificarRol('ADMIN'), async (req, res) => {
   try {
     const result = await pool.query(
@@ -281,9 +262,7 @@ router.get('/', verificarToken, verificarRol('ADMIN'), async (req, res) => {
   }
 });
 
-// ========================
-// OBTENER USUARIO POR ID (solo ADMIN)
-// ========================
+
 router.get('/:id', verificarToken, verificarRol('ADMIN'), async (req, res) => {
   try {
     const { id } = req.params;
@@ -304,15 +283,13 @@ router.get('/:id', verificarToken, verificarRol('ADMIN'), async (req, res) => {
   }
 });
 
-// ========================
-// ACTUALIZAR USUARIO (solo ADMIN)
-// ========================
+
 router.put('/:id', verificarToken, verificarRol('ADMIN'), async (req, res) => {
   try {
     const { id } = req.params;
     const { username, rol, password } = req.body;
 
-    // Verificar que el usuario existe
+
     const usuarioExistente = await pool.query(
       'SELECT id FROM usuarios WHERE id = $1',
       [id]
@@ -322,18 +299,18 @@ router.put('/:id', verificarToken, verificarRol('ADMIN'), async (req, res) => {
       return res.status(404).json({ ok: false, error: 'Usuario no encontrado' });
     }
 
-    // Validar rol si se proporciona
+
     if (rol && rol !== 'ADMIN' && rol !== 'CAJERO') {
       return res.status(400).json({ ok: false, error: 'Rol inválido' });
     }
 
-    // Si se proporciona nueva contraseña, encriptarla
+
     let hashedPassword = null;
     if (password) {
       hashedPassword = await bcrypt.hash(password, 10);
     }
 
-    // Construir la query dinámica
+
     const updates = [];
     const values = [];
     let paramCount = 1;
@@ -387,14 +364,12 @@ router.put('/:id', verificarToken, verificarRol('ADMIN'), async (req, res) => {
   }
 });
 
-// ========================
-// ELIMINAR USUARIO (solo ADMIN)
-// ========================
+
 router.delete('/:id', verificarToken, verificarRol('ADMIN'), async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Verificar que el usuario existe
+  
     const usuarioExistente = await pool.query(
       'SELECT id FROM usuarios WHERE id = $1',
       [id]
@@ -404,7 +379,7 @@ router.delete('/:id', verificarToken, verificarRol('ADMIN'), async (req, res) =>
       return res.status(404).json({ ok: false, error: 'Usuario no encontrado' });
     }
 
-    // Verificar si el usuario tiene ventas asociadas
+
     const ventasAsociadas = await pool.query(
       'SELECT COUNT(*) as total FROM ventas WHERE usuario_id = $1',
       [id]
@@ -417,7 +392,7 @@ router.delete('/:id', verificarToken, verificarRol('ADMIN'), async (req, res) =>
       });
     }
 
-    // Eliminar el usuario
+
     const result = await pool.query(
       'DELETE FROM usuarios WHERE id = $1 RETURNING id, username, rol',
       [id]

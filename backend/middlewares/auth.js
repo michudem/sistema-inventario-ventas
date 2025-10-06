@@ -2,7 +2,7 @@
 const jwt = require('jsonwebtoken');
 const pool = require('../database/connection');
 
-// Middleware para verificar token con blacklist
+
 async function verificarToken(req, res, next) {
   const authHeader = req.headers['authorization'];
 
@@ -13,7 +13,6 @@ async function verificarToken(req, res, next) {
   }
 
   try {
-    // 1. Verificar si el token está revocado (en blacklist)
     const revocado = await pool.query(
       'SELECT id FROM tokens_revocados WHERE token = $1',
       [token]
@@ -26,9 +25,9 @@ async function verificarToken(req, res, next) {
       });
     }
 
-    // 2. Verificar validez y firma del token
+    
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded; // Guardamos info del usuario en la request
+    req.user = decoded;
     next();
   } catch (err) {
     if (err.name === 'TokenExpiredError') {
@@ -44,7 +43,7 @@ async function verificarToken(req, res, next) {
   }
 }
 
-// Middleware para verificar rol
+
 function verificarRol(rol) {
   return (req, res, next) => {
     if (req.user.rol !== rol) {

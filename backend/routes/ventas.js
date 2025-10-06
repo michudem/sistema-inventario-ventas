@@ -1,6 +1,4 @@
-// ================================================
-// RUTAS DE VENTAS - AUTENTICACIÓN Y AUTORIZACIÓN
-// ================================================
+
 
 const express = require('express');
 const pool = require('../database/connection');
@@ -8,21 +6,16 @@ const { verificarToken } = require('../middlewares/auth');
 
 const router = express.Router();
 
-// Todas las rutas requieren autenticación
+
 router.use(verificarToken);
 
-// ========================
-// REGISTRAR VENTA
-// ========================
+
 router.post('/', async (req, res) => {
-  // OBTENER UNA CONEXIÓN ESPECIAL (para transacciones)
+
   const client = await pool.connect();
   
   try {
-    // 1. EXTRAER DATOS DEL CUERPO DE LA PETICIÓN
     const { productos } = req.body;
-
-    // 2. VALIDAR que haya productos
     if (!productos || productos.length === 0) {
       return res.status(400).json({ 
         ok: false, 
@@ -30,16 +23,13 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // 3. INICIAR TRANSACCIÓN
     await client.query('BEGIN');
 
     let totalVenta = 0;
 
-    // 4. VALIDAR STOCK Y CALCULAR TOTAL
     for (const item of productos) {
       const { producto_id, cantidad } = item;
 
-      // Validar que los datos sean correctos
       if (!producto_id || !cantidad || cantidad <= 0) {
         await client.query('ROLLBACK');
         return res.status(400).json({ 
@@ -48,13 +38,12 @@ router.post('/', async (req, res) => {
         });
       }
 
-      // Buscar el producto en la BD
       const productoResult = await client.query(
         'SELECT id, nombre, precio_unitario, cantidad FROM productos WHERE id=$1',
         [producto_id]
       );
 
-      // ¿Existe el producto?
+
       if (productoResult.rows.length === 0) {
         await client.query('ROLLBACK');
         return res.status(404).json({ 
@@ -65,7 +54,7 @@ router.post('/', async (req, res) => {
 
       const producto = productoResult.rows[0];
 
-      // ¿Hay suficiente stock?
+
       if (producto.cantidad < cantidad) {
         await client.query('ROLLBACK');
         return res.status(400).json({ 
@@ -74,11 +63,11 @@ router.post('/', async (req, res) => {
         });
       }
 
-      // Sumar al total
+
       totalVenta += producto.precio_unitario * cantidad;
     }
 
-    // 5. CREAR REGISTRO DE VENTA (primero con número temporal)
+
     const ventaResult = await client.query(
       'INSERT INTO ventas (numero_transaccion, usuario_id, total) VALUES ($1, $2, $3) RETURNING *',
       [`VT-TEMP-${Date.now()}`, req.user.id, totalVenta]
@@ -86,18 +75,18 @@ router.post('/', async (req, res) => {
 
     const venta = ventaResult.rows[0];
 
-    // 6. ACTUALIZAR CON NÚMERO DE TRANSACCIÓN REAL
+
     const numeroTransaccion = `VT-${String(venta.id).padStart(4, '0')}`;
     await client.query(
       'UPDATE ventas SET numero_transaccion = $1 WHERE id = $2',
       [numeroTransaccion, venta.id]
     );
 
-    // 7. CREAR DETALLE Y ACTUALIZAR STOCK
+
     for (const item of productos) {
       const { producto_id, cantidad } = item;
 
-      // Obtener precio del producto
+
       const productoResult = await client.query(
         'SELECT precio_unitario FROM productos WHERE id=$1',
         [producto_id]
@@ -106,23 +95,23 @@ router.post('/', async (req, res) => {
       const precioUnitario = productoResult.rows[0].precio_unitario;
       const subtotal = precioUnitario * cantidad;
 
-      // Insertar en detalle_ventas
+
       await client.query(
         'INSERT INTO detalle_ventas (venta_id, producto_id, cantidad, precio_unitario, subtotal) VALUES ($1, $2, $3, $4, $5)',
         [venta.id, producto_id, cantidad, precioUnitario, subtotal]
       );
 
-      // Actualizar stock (restar cantidad vendida)
+
       await client.query(
         'UPDATE productos SET cantidad = cantidad - $1 WHERE id = $2',
         [cantidad, producto_id]
       );
     }
 
-    // 8. CONFIRMAR TRANSACCIÓN
+
     await client.query('COMMIT');
 
-    // 9. OBTENER VENTA COMPLETA CON DETALLES
+
     const ventaCompleta = await pool.query(
       `SELECT v.*, u.username, 
               json_agg(
@@ -143,7 +132,7 @@ router.post('/', async (req, res) => {
       [venta.id]
     );
 
-    // 10. RESPONDER CON LA VENTA CREADA
+ 
     res.status(201).json({ 
       ok: true, 
       venta: ventaCompleta.rows[0],
@@ -151,7 +140,7 @@ router.post('/', async (req, res) => {
     });
 
   } catch (err) {
-    // Si hay error, deshacer todo
+
     await client.query('ROLLBACK');
     console.error('Error al procesar venta:', err);
     res.status(500).json({ 
@@ -159,14 +148,12 @@ router.post('/', async (req, res) => {
       error: 'Error al procesar venta' 
     });
   } finally {
-    // Siempre liberar la conexión
+
     client.release();
   }
 });
 
-// ========================
-// LISTAR VENTAS
-// ========================
+
 router.get('/', async (req, res) => {
   try {
     const { fecha_inicio, fecha_fin, page = 1, limit = 10 } = req.query;
@@ -192,7 +179,7 @@ router.get('/', async (req, res) => {
     const params = [];
     const conditions = [];
 
-    // Filtro opcional por fechas
+
     if (fecha_inicio && fecha_fin) {
       params.push(fecha_inicio, fecha_fin);
       conditions.push(`v.fecha BETWEEN $${params.length - 1} AND $${params.length}`);
@@ -221,9 +208,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// ========================
-// VER VENTA POR ID
-// ========================
+
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -268,9 +253,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// ========================
-// GENERAR TICKET PDF
-// ========================
+
 router.get('/:id/ticket-pdf', async (req, res) => {
   try {
     const { id } = req.params;
@@ -310,7 +293,7 @@ router.get('/:id/ticket-pdf', async (req, res) => {
 
     doc.pipe(res);
 
-    // Encabezado
+
     doc.fontSize(14).font('Helvetica-Bold').text('TICKET DE VENTA', { align: 'center' });
     doc.fontSize(9).font('Helvetica').text('Sistema de Inventario', { align: 'center' });
     doc.moveDown(0.5);
@@ -327,7 +310,7 @@ router.get('/:id/ticket-pdf', async (req, res) => {
     doc.moveTo(20, doc.y).lineTo(206, doc.y).stroke();
     doc.moveDown(0.5);
 
-    // Encabezados de tabla
+
     doc.fontSize(9).font('Helvetica-Bold');
     const headerY = doc.y;
     doc.text('PRODUCTO', 20, headerY, { width: 90, align: 'left' });
@@ -339,7 +322,7 @@ router.get('/:id/ticket-pdf', async (req, res) => {
     doc.moveTo(20, doc.y).lineTo(206, doc.y).stroke();
     doc.moveDown(0.5);
 
-    // Productos
+
     doc.font('Helvetica').fontSize(8);
     venta.productos.forEach(item => {
       const yPos = doc.y;
@@ -359,7 +342,7 @@ router.get('/:id/ticket-pdf', async (req, res) => {
     doc.moveTo(20, doc.y).lineTo(206, doc.y).stroke();
     doc.moveDown(0.5);
 
-    // Total
+
     doc.fontSize(12).font('Helvetica-Bold');
     const totalY = doc.y;
     doc.text('TOTAL:', 20, totalY, { width: 90, align: 'left' });
