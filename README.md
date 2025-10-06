@@ -308,7 +308,7 @@ Abre tu navegador y ve a: **http://localhost:5173**
 
 Al abrir la aplicación, verás la pantalla de inicio de sesión:
 
-![Login Screen](docs/login.png)
+![Login Screen](C:\inventario-ventas\frontend-react\public\docs\login.png)
 
 ### Usuarios de Prueba
 
