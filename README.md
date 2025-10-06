@@ -21,9 +21,7 @@ Sistema completo para gestión de inventario, ventas y reportes con autenticaci�
 
 ---
 
-## 🏗️ Arquitectura del Proyecto
-
-```
+## Arquitectura del Proyecto
 inventario-ventas/
 ├── backend/                    # API REST con Node.js + Express
 │   ├── constants/
@@ -57,8 +55,6 @@ inventario-ventas/
     │   ├── hooks/             # Custom Hooks
     │   └── services/          # Servicios HTTP
     └── package.json
-```
-
 ---
 
 ##  Tecnologías Utilizadas
