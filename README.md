@@ -903,7 +903,6 @@ ISC
 
 Michel Yagari
 micheldahanayagari@gmail.com
-[\[Tu GitHub\]](https://github.com/tu-usuario/inventario-ventas)
 
 
 
