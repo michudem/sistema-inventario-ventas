@@ -33,7 +33,6 @@ app.get('/', (req, res) => {
   });
 });
 
-
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ 
@@ -43,8 +42,8 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => {
-  console.log(` Servidor corriendo en http://localhost:${PORT}`);
-  console.log(` Encoding: UTF-8`);
+  console.log(`✓ Servidor corriendo en http://localhost:${PORT}`);
+  console.log(`✓ Encoding: UTF-8`);
 });
 
 export default app;

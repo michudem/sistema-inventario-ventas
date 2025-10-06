@@ -1,87 +1,146 @@
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useState } from 'react';
-import { Home, ShoppingCart, Package, FileText, Users, LogOut, Menu, X } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { 
+  LayoutDashboard, 
+  Package, 
+  ShoppingCart, 
+  FileText, 
+  Users, 
+  LogOut,
+  Menu,
+  X 
+} from 'lucide-react';
 import InicioView from './InicioView';
 import ProductosView from './ProductosView';
 import VentasView from './VentasView';
 import ReportesView from './ReportesView';
 import UsuariosView from './UsuariosView';
+import { useAuth } from '../context/AuthContext';
 
 export default function Dashboard() {
-  const { user, logout } = useAuth();
-  const [view, setView] = useState('inicio');
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { logout } = useAuth();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+
+  if (!user || !user.username) {
+    return <Navigate to="/login" replace />;
+  }
 
   const menuItems = [
-    { id: 'inicio', label: 'Inicio', icon: Home, roles: ['ADMIN', 'CAJERO'] },
-    { id: 'productos', label: 'Productos', icon: Package, roles: ['ADMIN', 'CAJERO'] },
-    { id: 'ventas', label: 'Caja', icon: ShoppingCart, roles: ['ADMIN', 'CAJERO'] },
-    { id: 'reportes', label: 'Reportes', icon: FileText, roles: ['ADMIN', 'CAJERO'] },
-    { id: 'usuarios', label: 'Usuarios', icon: Users, roles: ['ADMIN'] },
-  ];
+    { name: 'Inicio', path: '/inicio', icon: LayoutDashboard },
+    { name: 'Productos', path: '/productos', icon: Package },
+    { name: 'Ventas', path: '/ventas', icon: ShoppingCart },
+    { name: 'Reportes', path: '/reportes', icon: FileText },
+    { name: 'Usuarios', path: '/usuarios', icon: Users, adminOnly: true },
+  ].filter(item => !item.adminOnly || user?.rol === 'ADMIN');
 
-  const filteredMenu = menuItems.filter(item => item.roles.includes(user.rol));
-
-  const renderView = () => {
-    switch(view) {
-      case 'inicio': return <InicioView />;
-      case 'productos': return <ProductosView />;
-      case 'ventas': return <VentasView />;
-      case 'reportes': return <ReportesView />;
-      case 'usuarios': return <UsuariosView />;
-      default: return <InicioView />;
+  const handleLogout = () => {
+    if (window.confirm('¿Estás seguro de cerrar sesión?')) {
+      logout();
+      navigate('/login');
     }
   };
 
   return (
     <div className="flex h-screen bg-gray-100">
-      {/* Sidebar */}
-      <div className={`${sidebarOpen ? 'w-64' : 'w-20'} bg-gray-900 text-white transition-all flex flex-col`}>
-        <div className="p-4 flex items-center justify-between">
-          <h2 className={`font-bold text-xl ${!sidebarOpen && 'hidden'}`}>Inventario</h2>
-          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-gray-800 rounded">
-            {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
+      <aside className={`bg-gray-800 text-white w-64 space-y-6 py-7 px-2 absolute inset-y-0 left-0 transform ${
+        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+      } md:relative md:translate-x-0 transition duration-200 ease-in-out z-20`}>
+        
+        <div className="flex items-center justify-between px-4">
+          <div className="flex items-center space-x-2">
+            <Package className="w-8 h-8" />
+            <span className="text-2xl font-extrabold">Inventario</span>
+          </div>
+          <button onClick={() => setSidebarOpen(false)} className="md:hidden">
+            <X className="w-6 h-6" />
           </button>
         </div>
 
-        <nav className="mt-8 flex-1">
-          {filteredMenu.map(item => (
-            <button
-              key={item.id}
-              onClick={() => setView(item.id)}
-              className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-800 transition ${
-                view === item.id ? 'bg-gray-800 border-l-4 border-blue-500' : ''
-              }`}
-            >
-              <item.icon size={20} />
-              <span className={!sidebarOpen ? 'hidden' : ''}>{item.label}</span>
-            </button>
-          ))}
+        <nav className="space-y-2">
+          {menuItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = location.pathname === item.path;
+            
+            return (
+              <button
+                key={item.path}
+                onClick={() => {
+                  navigate(item.path);
+                  setSidebarOpen(false);
+                }}
+                className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors w-full ${
+                  isActive 
+                    ? 'bg-blue-600 text-white' 
+                    : 'text-gray-300 hover:bg-gray-700'
+                }`}
+              >
+                <Icon className="w-5 h-5" />
+                <span>{item.name}</span>
+              </button>
+            );
+          })}
         </nav>
 
-        {/* User Info & Logout */}
-        <div className="p-4 border-t border-gray-800">
-          <div className={`mb-4 ${!sidebarOpen && 'hidden'}`}>
-            <p className="text-sm text-gray-400">Usuario</p>
-            <p className="font-semibold">{user.username}</p>
-            <p className="text-xs text-gray-400">{user.rol}</p>
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-700">
+          <div className="flex items-center space-x-3 mb-3 px-2">
+            <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center">
+              <span className="text-white font-bold">
+                {user.username?.charAt(0).toUpperCase()}
+              </span>
+            </div>
+            <div>
+              <p className="text-sm font-semibold">{user.username}</p>
+              <p className="text-xs text-gray-400">{user.rol}</p>
+            </div>
           </div>
-          <button 
-            onClick={logout} 
-            className="w-full flex items-center gap-3 px-4 py-3 bg-red-600 hover:bg-red-700 rounded-lg transition"
+          
+          <button
+            onClick={handleLogout}
+            className="flex items-center space-x-3 px-4 py-2 rounded-lg text-gray-300 hover:bg-gray-700 transition-colors w-full"
           >
-            <LogOut size={20} />
-            <span className={!sidebarOpen ? 'hidden' : ''}>Cerrar Sesión</span>
+            <LogOut className="w-5 h-5" />
+            <span>Cerrar Sesión</span>
           </button>
         </div>
+      </aside>
+
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <header className="bg-white shadow-md py-4 px-6 flex items-center">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="md:hidden mr-4"
+          >
+            <Menu className="w-6 h-6" />
+          </button>
+          <h1 className="text-2xl font-semibold text-gray-800">
+            Sistema de Gestión de Inventario
+          </h1>
+        </header>
+
+        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-6">
+          <Routes>
+            <Route path="/inicio" element={<InicioView />} />
+            <Route path="/productos" element={<ProductosView />} />
+            <Route path="/ventas" element={<VentasView />} />
+            <Route path="/reportes" element={<ReportesView />} />
+            {user.rol === 'ADMIN' && (
+              <Route path="/usuarios" element={<UsuariosView />} />
+            )}
+            <Route path="/" element={<Navigate to="/inicio" replace />} />
+          </Routes>
+        </main>
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 overflow-auto">
-        <div className="p-8">
-          {renderView()}
-        </div>
-      </div>
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black opacity-50 z-10 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
     </div>
   );
 }

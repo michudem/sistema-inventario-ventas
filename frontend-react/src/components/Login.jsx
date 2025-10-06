@@ -1,14 +1,17 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { LogIn } from 'lucide-react';
-import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
 import Toast from './Toast';
+import { authService } from '../services';
+import { MESSAGES } from '../constants/messages';
 
-export default function LoginView() {
-  const { login, loading } = useAuth();
+export default function Login() {
+  const navigate = useNavigate();
   const { toast, showToast, hideToast } = useToast();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -18,12 +21,20 @@ export default function LoginView() {
       return;
     }
 
-    await login(
-      username,
-      password,
-      (message) => showToast(message, 'success'),
-      (error) => showToast(error, 'error')
-    );
+    setLoading(true);
+    
+    try {
+      const data = await authService.login(username, password);
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.usuario));
+      showToast(MESSAGES.AUTH.LOGIN_SUCCESS, 'success');
+      navigate('/inicio');
+    } catch (error) {
+      const message = error.response?.data?.error || MESSAGES.AUTH.LOGIN_ERROR;
+      showToast(message, 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

@@ -1,182 +1,131 @@
-import pool from '../database/connection.js';
+import express from 'express';
+import PDFDocument from 'pdfkit';
+import { verificarToken } from '../middlewares/auth.js';
+import { ventasService } from '../services/ventasService.js';
 import { MESSAGES, HTTP_STATUS } from '../constants/messages.js';
-import { validateSale } from '../validators/validators.js';
 
-export const ventasService = {
-  async procesarVenta(productos, usuarioId) {
-    if (!validateSale.hasProducts(productos)) {
-      throw { status: HTTP_STATUS.BAD_REQUEST, message: MESSAGES.SALES.EMPTY_CART };
-    }
+const router = express.Router();
 
-    const client = await pool.connect();
+router.use(verificarToken);
 
-    try {
-      await client.query('BEGIN');
-
-      let totalVenta = 0;
-
-      for (const item of productos) {
-        if (!validateSale.validProductItem(item)) {
-          throw { status: HTTP_STATUS.BAD_REQUEST, message: MESSAGES.SALES.INVALID_PRODUCT_DATA };
-        }
-
-        const { producto_id, cantidad } = item;
-
-        const productoResult = await client.query(
-          'SELECT id, nombre, precio_unitario, cantidad FROM productos WHERE id=$1',
-          [producto_id]
-        );
-
-        if (productoResult.rows.length === 0) {
-          throw { 
-            status: HTTP_STATUS.NOT_FOUND, 
-            message: MESSAGES.SALES.PRODUCT_NOT_FOUND(producto_id) 
-          };
-        }
-
-        const producto = productoResult.rows[0];
-
-        if (producto.cantidad < cantidad) {
-          throw { 
-            status: HTTP_STATUS.BAD_REQUEST, 
-            message: MESSAGES.SALES.INSUFFICIENT_STOCK(producto.nombre, producto.cantidad, cantidad) 
-          };
-        }
-
-        totalVenta += producto.precio_unitario * cantidad;
-      }
-
-      const ventaResult = await client.query(
-        'INSERT INTO ventas (numero_transaccion, usuario_id, total) VALUES ($1, $2, $3) RETURNING *',
-        [`VT-TEMP-${Date.now()}`, usuarioId, totalVenta]
-      );
-
-      const venta = ventaResult.rows[0];
-      const numeroTransaccion = `VT-${String(venta.id).padStart(4, '0')}`;
-
-      await client.query(
-        'UPDATE ventas SET numero_transaccion = $1 WHERE id = $2',
-        [numeroTransaccion, venta.id]
-      );
-
-      for (const item of productos) {
-        const { producto_id, cantidad } = item;
-
-        const productoResult = await client.query(
-          'SELECT precio_unitario FROM productos WHERE id=$1',
-          [producto_id]
-        );
-
-        const precioUnitario = productoResult.rows[0].precio_unitario;
-        const subtotal = precioUnitario * cantidad;
-
-        await client.query(
-          'INSERT INTO detalle_ventas (venta_id, producto_id, cantidad, precio_unitario, subtotal) VALUES ($1, $2, $3, $4, $5)',
-          [venta.id, producto_id, cantidad, precioUnitario, subtotal]
-        );
-
-        await client.query(
-          'UPDATE productos SET cantidad = cantidad - $1 WHERE id = $2',
-          [cantidad, producto_id]
-        );
-      }
-
-      await client.query('COMMIT');
-
-      const ventaCompleta = await pool.query(
-        `SELECT v.*, u.username, 
-                json_agg(
-                  json_build_object(
-                    'producto_id', dv.producto_id,
-                    'nombre', p.nombre,
-                    'cantidad', dv.cantidad,
-                    'precio_unitario', dv.precio_unitario,
-                    'subtotal', dv.subtotal
-                  )
-                ) as productos
-         FROM ventas v
-         JOIN usuarios u ON v.usuario_id = u.id
-         JOIN detalle_ventas dv ON v.id = dv.venta_id
-         JOIN productos p ON dv.producto_id = p.id
-         WHERE v.id = $1
-         GROUP BY v.id, u.username`,
-        [venta.id]
-      );
-
-      return ventaCompleta.rows[0];
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
-  },
-
-  async obtenerVentas(filtros) {
-    const { fecha_inicio, fecha_fin, page = 1, limit = 10 } = filtros;
-    const offset = (page - 1) * limit;
-
-    let query = `
-      SELECT v.*, u.username,
-             json_agg(
-               json_build_object(
-                 'producto_id', dv.producto_id,
-                 'nombre', p.nombre,
-                 'cantidad', dv.cantidad,
-                 'precio_unitario', dv.precio_unitario,
-                 'subtotal', dv.subtotal
-               )
-             ) as productos
-      FROM ventas v
-      JOIN usuarios u ON v.usuario_id = u.id
-      JOIN detalle_ventas dv ON v.id = dv.venta_id
-      JOIN productos p ON dv.producto_id = p.id
-    `;
-
-    const params = [];
-    const conditions = [];
-
-    if (fecha_inicio && fecha_fin) {
-      params.push(fecha_inicio, fecha_fin);
-      conditions.push(`v.fecha BETWEEN $${params.length - 1} AND $${params.length}`);
-    }
-
-    if (conditions.length > 0) {
-      query += ' WHERE ' + conditions.join(' AND ');
-    }
-
-    query += ` GROUP BY v.id, u.username ORDER BY v.fecha DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
-    params.push(limit, offset);
-
-    const result = await pool.query(query, params);
-    return result.rows;
-  },
-
-  async obtenerVentaPorId(id) {
-    const result = await pool.query(
-      `SELECT v.*, u.username,
-              json_agg(
-                json_build_object(
-                  'producto_id', dv.producto_id,
-                  'nombre', p.nombre,
-                  'cantidad', dv.cantidad,
-                  'precio_unitario', dv.precio_unitario,
-                  'subtotal', dv.subtotal
-                )
-              ) as productos
-       FROM ventas v
-       JOIN usuarios u ON v.usuario_id = u.id
-       JOIN detalle_ventas dv ON v.id = dv.venta_id
-       JOIN productos p ON dv.producto_id = p.id
-       WHERE v.id = $1
-       GROUP BY v.id, u.username`,
-      [id]
-    );
-
-    if (result.rows.length === 0) {
-      throw { status: HTTP_STATUS.NOT_FOUND, message: MESSAGES.SALES.NOT_FOUND };
-    }
-
-    return result.rows[0];
+router.post('/', async (req, res) => {
+  try {
+    const { productos } = req.body;
+    const venta = await ventasService.procesarVenta(productos, req.user.id);
+    
+    res.status(HTTP_STATUS.CREATED).json({ 
+      ok: true, 
+      venta,
+      mensaje: MESSAGES.SALES.CREATED
+    });
+  } catch (err) {
+    const status = err.status || HTTP_STATUS.INTERNAL_ERROR;
+    const message = err.message || MESSAGES.ERRORS.PROCESS_SALE;
+    console.error('[ERROR]', err);
+    res.status(status).json({ ok: false, error: message });
   }
-};
+});
+
+router.get('/', async (req, res) => {
+  try {
+    const ventas = await ventasService.obtenerVentas(req.query);
+    res.json({ ok: true, pagina: req.query.page || 1, ventas });
+  } catch (err) {
+    console.error('[ERROR]', err);
+    res.status(HTTP_STATUS.INTERNAL_ERROR).json({ 
+      ok: false, 
+      error: MESSAGES.ERRORS.GET_SALES 
+    });
+  }
+});
+
+router.get('/:id', async (req, res) => {
+  try {
+    const venta = await ventasService.obtenerVentaPorId(req.params.id);
+    res.json({ ok: true, venta });
+  } catch (err) {
+    const status = err.status || HTTP_STATUS.INTERNAL_ERROR;
+    const message = err.message || MESSAGES.ERRORS.GET_SALE;
+    res.status(status).json({ ok: false, error: message });
+  }
+});
+
+router.get('/:id/ticket-pdf', async (req, res) => {
+  try {
+    const venta = await ventasService.obtenerVentaPorId(req.params.id);
+
+    const doc = new PDFDocument({ 
+      margin: 20, 
+      size: [226.77, 841.89]
+    });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=ticket_${venta.numero_transaccion}.pdf`);
+
+    doc.pipe(res);
+
+    doc.fontSize(14).font('Helvetica-Bold').text('TICKET DE VENTA', { align: 'center' });
+    doc.fontSize(9).font('Helvetica').text('Sistema de Inventario', { align: 'center' });
+    doc.moveDown(0.5);
+    
+    doc.moveTo(20, doc.y).lineTo(206, doc.y).stroke();
+    doc.moveDown(0.5);
+
+    doc.fontSize(9).font('Helvetica');
+    doc.text(`Ticket: ${venta.numero_transaccion}`);
+    doc.text(`Fecha: ${new Date(venta.fecha).toLocaleString('es-CO')}`);
+    doc.text(`Cajero: ${venta.username}`);
+    doc.moveDown(0.5);
+
+    doc.moveTo(20, doc.y).lineTo(206, doc.y).stroke();
+    doc.moveDown(0.5);
+
+    doc.fontSize(9).font('Helvetica-Bold');
+    const headerY = doc.y;
+    doc.text('PRODUCTO', 20, headerY, { width: 90, align: 'left' });
+    doc.text('CANT', 90, headerY, { width: 25, align: 'center' });
+    doc.text('PRECIO', 135, headerY, { width: 35, align: 'right' });
+    doc.text('TOTAL', 170, headerY, { width: 36, align: 'right' });
+    
+    doc.moveDown(0.3);
+    doc.moveTo(20, doc.y).lineTo(206, doc.y).stroke();
+    doc.moveDown(0.5);
+
+    doc.font('Helvetica').fontSize(8);
+    venta.productos.forEach(item => {
+      const yPos = doc.y;
+      const nombreCorto = item.nombre.length > 18 
+        ? item.nombre.substring(0, 18) 
+        : item.nombre;
+      
+      doc.text(nombreCorto, 20, yPos, { width: 90, align: 'left' });
+      doc.text(item.cantidad.toString(), 90, yPos, { width: 25, align: 'center' });
+      doc.text(`$${item.precio_unitario.toLocaleString()}`, 135, yPos, { width: 35, align: 'right' });
+      doc.text(`$${item.subtotal.toLocaleString()}`, 170, yPos, { width: 36, align: 'right' });
+      
+      doc.moveDown(0.8);
+    });
+
+    doc.moveDown(0.3);
+    doc.moveTo(20, doc.y).lineTo(206, doc.y).stroke();
+    doc.moveDown(0.5);
+
+    doc.fontSize(12).font('Helvetica-Bold');
+    const totalY = doc.y;
+    doc.text('TOTAL:', 20, totalY, { width: 90, align: 'left' });
+    doc.text(`$${parseFloat(venta.total).toLocaleString('es-CO')}`, 110, totalY, { width: 96, align: 'right' });
+    
+    doc.moveDown(1);
+    doc.fontSize(9).font('Helvetica').text('¡Gracias por su compra!', { align: 'center' });
+
+    doc.end();
+  } catch (err) {
+    console.error('[ERROR]', err);
+    res.status(HTTP_STATUS.INTERNAL_ERROR).json({ 
+      ok: false, 
+      error: MESSAGES.ERRORS.GENERATE_TICKET 
+    });
+  }
+});
+
+export default router;

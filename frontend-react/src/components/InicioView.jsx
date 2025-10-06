@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Package, ShoppingCart, DollarSign, TrendingDown, RefreshCw } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
 import icono from '../assets/icono.svg';
 import api from '../services/api';
 
@@ -27,7 +26,8 @@ function StatCard({ icon: Icon, title, value, color, loading }) {
 }
 
 export default function InicioView() {
-  const { user } = useAuth();
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  
   const [stats, setStats] = useState({
     totalProductos: 0,
     productosLowStock: 0,
@@ -40,9 +40,8 @@ export default function InicioView() {
   useEffect(() => {
     fetchStats();
     
-    // Actualizar automáticamente cada 30 segundos
     const interval = setInterval(() => {
-      fetchStats(false); // false = sin mostrar loading
+      fetchStats(false);
     }, 30000);
     
     return () => clearInterval(interval);
@@ -80,7 +79,7 @@ export default function InicioView() {
   const formatLastUpdate = () => {
     if (!lastUpdate) return '';
     const now = new Date();
-    const diff = Math.floor((now - lastUpdate) / 1000); // segundos
+    const diff = Math.floor((now - lastUpdate) / 1000);
     
     if (diff < 60) return 'Actualizado hace unos segundos';
     if (diff < 3600) return `Actualizado hace ${Math.floor(diff / 60)} min`;
@@ -92,7 +91,6 @@ export default function InicioView() {
 
   return (
     <div className="space-y-8">
-      {/* Bienvenida */}
       <div className="flex items-center justify-center">
         <div className="text-center space-y-6">
           <div className="flex justify-center">
@@ -110,16 +108,15 @@ export default function InicioView() {
 
           <div className="bg-white rounded-xl shadow-lg p-6 inline-block">
             <h2 className="text-2xl font-bold text-gray-800 mb-2">
-              ¡Bienvenido, {user.username}!
+              ¡Bienvenido, {user?.username || 'Usuario'}!
             </h2>
             <p className="text-gray-600">
-              Rol: <span className="font-semibold text-blue-600">{user.rol}</span>
+              Rol: <span className="font-semibold text-blue-600">{user?.rol || 'N/A'}</span>
             </p>
           </div>
         </div>
       </div>
 
-      {/* Estadísticas */}
       <div className="max-w-6xl mx-auto">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-2xl font-bold">Resumen del Día</h3>
@@ -172,7 +169,6 @@ export default function InicioView() {
           />
         </div>
 
-        {/* Alertas */}
         {!loading && stats.productosLowStock > 0 && (
           <div className="mt-4 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
             <div className="flex">
@@ -190,7 +186,6 @@ export default function InicioView() {
         )}
       </div>
 
-      {/* Instrucción */}
       <div className="text-center">
         <p className="text-gray-500 text-sm">
           Usa el menú lateral para navegar por el sistema

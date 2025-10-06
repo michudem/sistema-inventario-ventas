@@ -1,49 +1,20 @@
-import { useEffect } from 'react';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import { useToast } from './hooks/useToast';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
-import Toast from './components/Toast';
 
-function AppContent() {
-  const { user, loading } = useAuth();
-  const { toast, showToast, hideToast } = useToast();
-
-  useEffect(() => {
-    const handleSessionExpired = (event) => {
-      showToast(event.detail, 'error');
-    };
-
-    window.addEventListener('sessionExpired', handleSessionExpired);
-    
-    return () => {
-      window.removeEventListener('sessionExpired', handleSessionExpired);
-    };
-  }, [showToast]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <div className="text-xl text-gray-600">Cargando...</div>
-        </div>
-      </div>
-    );
-  }
-
+function App() {
   return (
-    <>
-      {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
-      {user ? <Dashboard /> : <Login />}
-    </>
+    <Router>
+      <AuthProvider>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/*" element={<Dashboard />} />
+          <Route path="/" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </AuthProvider>
+    </Router>
   );
 }
 
-export default function App() {
-  return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
-  );
-}
+export default App;
