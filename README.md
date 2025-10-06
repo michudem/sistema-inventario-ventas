@@ -104,7 +104,7 @@ Antes de instalar el sistema, asegúrate de tener instalado:
 
 ```bash
 # Clonar desde GitHub
-git clone https://github.com/tu-usuario/inventario-ventas.git
+git clone https://github.com/michudem/sistema-inventario-ventas/tree/main
 
 # Entrar al directorio
 cd inventario-ventas
