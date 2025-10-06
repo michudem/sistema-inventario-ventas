@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useState } from 'react';
+import icono from '../assets/miniatura.svg';
 import { 
   LayoutDashboard, 
   Package, 
@@ -52,7 +53,7 @@ export default function Dashboard() {
         
         <div className="flex items-center justify-between px-4">
           <div className="flex items-center space-x-2">
-            <Package className="w-8 h-8" />
+            <img src={icono} alt="Logo" className="w-8 h-8" />
             <span className="text-2xl font-extrabold">Inventario</span>
           </div>
           <button onClick={() => setSidebarOpen(false)} className="md:hidden">

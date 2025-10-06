@@ -5,6 +5,7 @@ import { useToast } from '../hooks/useToast';
 import Toast from './Toast';
 import { authService } from '../services';
 import { MESSAGES } from '../constants/messages';
+import icono from '../assets/logo.svg';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -43,9 +44,7 @@ export default function Login() {
       
       <div className="bg-white p-8 rounded-lg shadow-2xl w-96">
         <div className="flex justify-center mb-6">
-          <div className="bg-blue-100 p-3 rounded-full">
-            <LogIn className="w-8 h-8 text-blue-600" />
-          </div>
+          <img src={icono} alt="Logo" className="w-60 h-20" />  {/* Sin el div contenedor */}
         </div>
 
         <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">
